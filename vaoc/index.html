@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VAOC — IDEX Calibration</title>
+  <style>
+    :root {
+      --bg:         #121212;
+      --surface:    #1e1e1e;
+      --surface2:   #272727;
+      --border:     #333;
+      --text:       #e0e0e0;
+      --muted:      #777;
+      --accent:     #e3a517;
+      --ok:         #4caf50;
+      --warn:       #ff9800;
+      --err:        #f44336;
+      --t0:         #2196f3;
+      --t1:         #e91e63;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', Roboto, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-size: 14px;
+    }
+
+    /* ── HEADER ───────────────────────────────── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .header-title {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: .06em;
+    }
+    .header-title span { color: var(--accent); }
+    .ws-badge {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .btn-mainsail {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .15s, border-color .15s;
+    }
+    .btn-mainsail:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #1a1a1a;
+    }
+    .btn-mainsail svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .dot.ok  { background: var(--ok); }
+    .dot.err { background: var(--err); }
+
+    /* ── TOOLBAR ──────────────────────────────── */
+    .toolbar {
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 18px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 12px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .tb-item { display: flex; align-items: center; gap: 5px; }
+    .tb-val  { font-family: monospace; font-weight: 700; font-size: 13px; }
+    .tb-val.t0 { color: var(--t0); }
+    .tb-val.t1 { color: var(--t1); }
+    .sep { color: var(--border); }
+
+    /* ── MAIN LAYOUT ──────────────────────────── */
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── CAMERA ───────────────────────────────── */
+    .cam-wrap {
+      flex: 1;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      min-width: 0;
+    }
+    #cam-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: none;
+    }
+    .cam-placeholder {
+      text-align: center;
+      color: var(--muted);
+    }
+    .cam-placeholder .icon { font-size: 52px; margin-bottom: 10px; }
+    .cam-placeholder p    { font-size: 13px; }
+
+    /* Crosshair */
+    .crosshair {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .crosshair::before, .crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(255, 60, 60, .85);
+    }
+    .crosshair::before { width: 48px; height: 1.5px; top: 0; left: -24px; }
+    .crosshair::after  { width: 1.5px; height: 48px; top: -24px; left: 0; }
+    .crosshair-ring {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 14px; height: 14px;
+      border: 1.5px solid rgba(255, 60, 60, .6);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    /* ── SIDEBAR ──────────────────────────────── */
+    .sidebar {
+      width: 400px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .block {
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .block-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 9px;
+    }
+
+    /* ── STATE CARD ───────────────────────────── */
+    .state-card {
+      border-left: 3px solid var(--muted);
+      background: var(--surface2);
+      border-radius: 5px;
+      padding: 9px 11px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .state-card.idle    { border-color: var(--muted); }
+    .state-card.t0      { border-color: var(--t0); }
+    .state-card.t1      { border-color: var(--t1); }
+    .state-card.done    { border-color: var(--ok); }
+
+    /* ── POSITION ─────────────────────────────── */
+    .pos-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+    .pos-box {
+      background: var(--surface2);
+      border-radius: 5px;
+      padding: 8px 10px;
+    }
+    .pos-lbl { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+    .pos-num {
+      font-family: monospace;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    /* ── INCREMENTS ───────────────────────────── */
+    .inc-row {
+      display: flex;
+      gap: 5px;
+    }
+    .inc-btn {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-size: 11px;
+      padding: 6px 3px;
+      cursor: pointer;
+      text-align: center;
+      transition: background .12s;
+    }
+    .inc-btn:hover  { background: var(--border); }
+    .inc-btn.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
+
+    /* ── JOG PAD ──────────────────────────────── */
+    .jog-grid {
+      display: grid;
+      grid-template-columns: 78px 78px 78px;
+      grid-auto-rows: 78px;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .jog-btn {
+      width: 78px;
+      height: 78px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 30px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .08s, transform .08s;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .jog-btn:hover  { background: #3a3a3a; }
+    .jog-btn:active { background: var(--accent); color: #000; transform: scale(.93); }
+    .jog-btn.center { background: transparent; border-color: transparent; cursor: default; font-size: 14px; color: var(--muted); }
+    .jog-btn:disabled { opacity: .3; cursor: not-allowed; }
+    .jog-z-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .jog-z-col .jog-btn {
+      width: 78px;
+      height: 78px;
+      font-size: 30px;
+    }
+
+    /* ── OFFSET DISPLAY ───────────────────────── */
+    .offset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+    .off-box {
+      background: var(--surface2);
+      border-radius: 5px;
+      padding: 8px 10px;
+      text-align: center;
+    }
+    .off-lbl { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+    .off-num { font-family: monospace; font-size: 18px; font-weight: 700; color: var(--accent); }
+
+    /* ── BUTTONS ──────────────────────────────── */
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      border-radius: 5px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 5px;
+      letter-spacing: .03em;
+      transition: filter .12s, opacity .12s;
+    }
+    .btn:last-child { margin-bottom: 0; }
+    .btn:disabled   { opacity: .35; cursor: not-allowed; }
+    .btn:not(:disabled):hover { filter: brightness(1.12); }
+
+    .btn-start  { background: var(--accent);  color: #000; }
+    .btn-set-t0 { background: var(--t0);      color: #fff; }
+    .btn-set-t1 { background: var(--t1);      color: #fff; }
+    .btn-redo   { background: #555;           color: #fff; }
+    .btn-accept { background: var(--ok);      color: #fff; }
+    .btn-switch { background: #6a3db8;         color: #fff; }
+    .btn-cancel { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .copy-btn {
+      background: none; border: 1px solid var(--border); border-radius: 3px;
+      color: var(--muted); font-size: 11px; cursor: pointer; padding: 2px 5px;
+      margin-top: 4px; transition: all .12s;
+    }
+    .copy-btn:hover { background: var(--border); color: var(--text); }
+
+    /* ── SETTINGS ─────────────────────────────── */
+    .setting-row { margin-bottom: 9px; }
+    .setting-row:last-child { margin-bottom: 0; }
+    .setting-lbl { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .setting-row input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+    .setting-row.row2 { display: flex; gap: 6px; }
+    .setting-row.row2 input { flex: 1; }
+    .setting-row.row2 button {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .setting-row.row2 button:hover { background: var(--border); }
+
+    .badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge.t0 { background: var(--t0); color: #fff; }
+    .badge.t1 { background: var(--t1); color: #fff; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-title">VAOC — <span>IDEX Calibration</span></div>
+  <div class="header-right">
+    <a href="/" class="btn-mainsail" title="Volver a Mainsail">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+      Mainsail
+    </a>
+    <div class="ws-badge">
+      <div class="dot" id="ws-dot"></div>
+      <span id="ws-label">Disconnected</span>
+    </div>
+  </div>
+</div>
+
+<!-- TOOLBAR: posición en vivo -->
+<div class="toolbar">
+  <div class="tb-item">
+    <span style="color:var(--muted)">Tool:</span>
+    <span class="tb-val" id="tb-tool">—</span>
+  </div>
+  <span class="sep">|</span>
+  <div class="tb-item">
+    <span style="color:var(--muted)">X:</span>
+    <span class="tb-val" id="tb-x">—</span>
+  </div>
+  <div class="tb-item">
+    <span style="color:var(--muted)">Y:</span>
+    <span class="tb-val" id="tb-y">—</span>
+  </div>
+  <span class="sep">|</span>
+  <div class="tb-item" id="tb-homed" style="color:var(--muted)">Not homed</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- CÁMARA -->
+  <div class="cam-wrap">
+    <div class="cam-placeholder" id="cam-placeholder">
+      <div class="icon">📷</div>
+      <p>No camera signal</p>
+      <p style="font-size:11px;margin-top:4px;">Set the stream URL in ⚙ Settings</p>
+    </div>
+    <img id="cam-img" alt="stream VAOC" />
+    <div class="crosshair"></div>
+    <div class="crosshair-ring"></div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- Mira / crosshair -->
+    <div class="block">
+      <div class="block-title">Mira (círculo de alineado)</div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:11px; color:var(--muted);">Size</span>
+        <input type="range" id="ring-size" min="6" max="220" step="2" value="14" style="flex:1;">
+        <span id="ring-size-label" style="font-size:11px; color:var(--muted); width:36px; text-align:right;">14px</span>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="block">
+      <div class="block-title">Status</div>
+      <div class="state-card idle" id="state-card">
+        Ready. Press <b>START</b> to begin calibration.
+      </div>
+    </div>
+
+    <!-- Position -->
+    <div class="block">
+      <div class="block-title">Current position</div>
+      <div class="pos-row">
+        <div class="pos-box">
+          <div class="pos-lbl">X</div>
+          <div class="pos-num" id="pos-x">—</div>
+        </div>
+        <div class="pos-box">
+          <div class="pos-lbl">Y</div>
+          <div class="pos-num" id="pos-y">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Increment -->
+    <div class="block">
+      <div class="block-title">Increment (mm)</div>
+      <div class="inc-row">
+        <button class="inc-btn" data-v="0.01">0.01</button>
+        <button class="inc-btn" data-v="0.05">0.05</button>
+        <button class="inc-btn active" data-v="0.1">0.1</button>
+        <button class="inc-btn" data-v="0.5">0.5</button>
+        <button class="inc-btn" data-v="1.0">1.0</button>
+      </div>
+    </div>
+
+    <!-- Jog -->
+    <div class="block">
+      <div class="block-title">Jog &nbsp;<span style="font-size:10px;color:var(--muted);font-weight:400;">(also: keyboard arrow keys)</span></div>
+      <div style="display:flex; gap:16px; align-items:center; justify-content:center;">
+        <div class="jog-grid">
+          <div></div>
+          <button class="jog-btn" id="jog-yp" title="Y+">▲</button>
+          <div></div>
+          <button class="jog-btn" id="jog-xm" title="X-">◀</button>
+          <div class="jog-btn center" id="jog-center">XY</div>
+          <button class="jog-btn" id="jog-xp" title="X+">▶</button>
+          <div></div>
+          <button class="jog-btn" id="jog-ym" title="Y-">▼</button>
+          <div></div>
+        </div>
+        <div class="jog-z-col">
+          <button class="jog-btn" id="jog-zp" title="Z+ (move away from camera)">▲</button>
+          <div class="jog-btn center" id="jog-zcenter">Z</div>
+          <button class="jog-btn" id="jog-zm" title="Z- (move closer to camera)">▼</button>
+        </div>
+      </div>
+      <div style="margin-top:6px; font-size:11px; color:var(--muted);">
+        Z is only for focusing / adjusting nozzle distance to camera — not saved anywhere.
+      </div>
+    </div>
+
+    <!-- Offset pendiente (oculto hasta que se calcula) -->
+    <div class="block" id="offset-block" style="display:none">
+      <div class="block-title">Calculated offset</div>
+      <div class="offset-grid">
+        <div class="off-box">
+          <div class="off-lbl">X offset</div>
+          <div class="off-num" id="off-x">—</div>
+          <button class="copy-btn" onclick="copyVal('off-x')" title="Copy">⧉</button>
+        </div>
+        <div class="off-box">
+          <div class="off-lbl">Y offset</div>
+          <div class="off-num" id="off-y">—</div>
+          <button class="copy-btn" onclick="copyVal('off-y')" title="Copy">⧉</button>
+        </div>
+      </div>
+      <div style="margin-top:10px;font-size:11px;color:var(--muted);line-height:1.5;">
+        Apply these values to your T1 offset configuration.<br>
+        How to apply depends on your printer setup — see the README.
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="block">
+      <div class="block-title">Actions</div>
+      <button class="btn btn-start"  id="btn-start">⌂ START — Home + move to camera</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:5px;">
+        <button class="btn btn-set-t0" id="btn-set-t0" disabled style="margin-bottom:0">● SET T0</button>
+        <button class="btn btn-set-t1" id="btn-set-t1" disabled style="margin-bottom:0">● SET T1</button>
+      </div>
+      <button class="btn btn-switch" id="btn-switch" disabled>⇄ SWITCH — Change tool</button>
+      <button class="btn btn-accept" id="btn-accept" disabled>✔ ACCEPT — Finish calibration</button>
+      <button class="btn btn-cancel" id="btn-cancel" disabled>✕ CANCEL</button>
+    </div>
+
+    <!-- Settings -->
+    <div class="block">
+      <div class="block-title">⚙ Settings</div>
+
+      <div class="setting-row">
+        <div class="setting-lbl">Printer IP address</div>
+        <div class="setting-row row2">
+          <input type="text" id="ip-input" placeholder="192.168.1.100" />
+          <button onclick="applyIP()">Connect</button>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-lbl">VAOC camera stream URL</div>
+        <div class="setting-row row2">
+          <input type="text" id="cam-url-input" placeholder="http://IP/webcam2/?action=stream" />
+          <button onclick="applyCam()">Apply</button>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-lbl">Jog speed (mm/s)</div>
+        <input type="number" id="jog-speed" value="10" min="1" max="60" style="width:80px;" />
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+</div><!-- /main -->
+
+<script>
+// =========================================================
+// ESTADO DE LA APP
+// =========================================================
+const STATES = { IDLE:'idle', STARTING:'starting', ACTIVE:'active' };
+let state           = STATES.IDLE;
+let increment       = 0.1;
+let pendingX        = null;
+let pendingY        = null;
+let controlPointSet = false;   // true después del primer SET T0
+let activeTool      = 0;       // 0 = T0, 1 = T1 (sincronizado via WebSocket)
+let ws              = null;
+let wsReconnect     = null;
+
+// IP: intentamos deducirla de la URL actual
+const guessedIP = window.location.hostname !== '' ? window.location.hostname : '192.168.1.100';
+let printerIP   = localStorage.getItem('vaoc_ip')      || guessedIP;
+let camURL      = localStorage.getItem('vaoc_cam_url') || `http://${printerIP}/webcam2/?action=stream`;
+let jogSpeed    = parseFloat(localStorage.getItem('vaoc_jog_speed') || '10');
+let ringSize    = parseFloat(localStorage.getItem('vaoc_ring_size') || '14');
+
+// =========================================================
+// INIT
+// =========================================================
+document.getElementById('ip-input').value       = printerIP;
+document.getElementById('cam-url-input').value  = camURL;
+document.getElementById('jog-speed').value      = jogSpeed;
+document.getElementById('ring-size').value      = ringSize;
+applyRingSize(ringSize);
+applyCam();
+connectWS();
+renderState();
+
+document.getElementById('ring-size').addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  applyRingSize(v);
+  localStorage.setItem('vaoc_ring_size', v);
+});
+
+function applyRingSize(px) {
+  document.querySelector('.crosshair-ring').style.width  = px + 'px';
+  document.querySelector('.crosshair-ring').style.height = px + 'px';
+  document.getElementById('ring-size-label').textContent = px + 'px';
+}
+
+// =========================================================
+// WEBSOCKET — Moonraker
+// =========================================================
+function connectWS() {
+  if (wsReconnect) clearTimeout(wsReconnect);
+  if (ws) { try { ws.close(); } catch(_) {} }
+
+  ws = new WebSocket(`ws://${printerIP}/websocket`);
+  let msgId = 1;
+
+  ws.onopen = () => {
+    setWS(true);
+    ws.send(JSON.stringify({
+      jsonrpc: '2.0', id: msgId++,
+      method: 'printer.objects.subscribe',
+      params: {
+        objects: {
+          toolhead:                ['position', 'homed_axes', 'extruder'],
+          'gcode_macro VAOC_VARS': null,
+        }
+      }
+    }));
+  };
+
+  ws.onclose  = () => { setWS(false); wsReconnect = setTimeout(connectWS, 3000); };
+  ws.onerror  = () => { setWS(false); };
+
+  ws.onmessage = (ev) => {
+    let d;
+    try { d = JSON.parse(ev.data); } catch { return; }
+    if (d.method === 'notify_status_update' && d.params?.[0]) processStatus(d.params[0]);
+    if (d.result?.status) processStatus(d.result.status);
+  };
+}
+
+function setWS(ok) {
+  document.getElementById('ws-dot').className    = 'dot ' + (ok ? 'ok' : 'err');
+  document.getElementById('ws-label').textContent = ok ? printerIP : 'Disconnected';
+}
+
+function processStatus(s) {
+  if (s.toolhead) {
+    if (s.toolhead.position) {
+      const [x, y] = s.toolhead.position;
+      const xStr = x.toFixed(3), yStr = y.toFixed(3);
+      document.getElementById('tb-x').textContent  = xStr;
+      document.getElementById('tb-y').textContent  = yStr;
+      document.getElementById('pos-x').textContent = xStr;
+      document.getElementById('pos-y').textContent = yStr;
+    }
+    if (s.toolhead.extruder !== undefined) {
+      activeTool = (s.toolhead.extruder === 'extruder1') ? 1 : 0;
+      const badge = activeTool === 1
+        ? '<span class="badge t1">T1</span>'
+        : '<span class="badge t0">T0</span>';
+      document.getElementById('tb-tool').innerHTML = badge;
+      const cls = activeTool === 1 ? 't1' : 't0';
+      document.getElementById('pos-x').className = 'pos-num ' + cls;
+      document.getElementById('pos-y').className = 'pos-num ' + cls;
+      // Re-render buttons based on active tool
+      if (state === STATES.ACTIVE) renderState();
+    }
+    if (s.toolhead.homed_axes !== undefined) {
+      const h  = s.toolhead.homed_axes;
+      const el = document.getElementById('tb-homed');
+      if (h === 'xyz') { el.textContent = '✓ Homed'; el.style.color = 'var(--ok)'; }
+      else             { el.textContent = `Not homed (${h || 'ninguno'})`; el.style.color = 'var(--muted)'; }
+    }
+  }
+
+  const v = s['gcode_macro VAOC_VARS'];
+  if (v) {
+    if (v.pending_x_offset !== undefined) pendingX = v.pending_x_offset;
+    if (v.pending_y_offset !== undefined) pendingY = v.pending_y_offset;
+    if (v.control_set !== undefined) controlPointSet = !!v.control_set;
+    if (pendingX !== null && state === STATES.ACTIVE) showOffset();
+    if (state === STATES.ACTIVE) renderState();
+  }
+}
+
+// =========================================================
+// GCODE
+// =========================================================
+async function gcode(cmd) {
+  try {
+    const r = await fetch(`http://${printerIP}/printer/gcode/script`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ script: cmd })
+    });
+    if (!r.ok) console.warn('Gcode error:', r.status);
+  } catch(e) { console.error('Fetch error:', e); }
+}
+
+// =========================================================
+// CÁMARA
+// =========================================================
+function applyCam() {
+  camURL = document.getElementById('cam-url-input').value.trim();
+  localStorage.setItem('vaoc_cam_url', camURL);
+  const img = document.getElementById('cam-img');
+  const ph  = document.getElementById('cam-placeholder');
+  if (camURL) {
+    img.src = camURL + (camURL.includes('?') ? '&' : '?') + '_t=' + Date.now();
+    img.style.display = 'block';
+    ph.style.display  = 'none';
+    img.onerror = () => { img.style.display = 'none'; ph.style.display = 'block'; };
+  } else {
+    img.style.display = 'none';
+    ph.style.display  = 'block';
+  }
+}
+
+// =========================================================
+// INCREMENTOS
+// =========================================================
+document.querySelectorAll('.inc-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.inc-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    increment = parseFloat(b.dataset.v);
+  });
+});
+
+// =========================================================
+// JOG
+// =========================================================
+function jog(dx, dy) {
+  if (state !== STATES.ACTIVE) return;
+  const f = parseFloat(document.getElementById('jog-speed').value) * 60;
+  gcode(`VAOC_MOVE X=${dx} Y=${dy} F=${f}`);
+}
+
+function jogZ(dz) {
+  if (state !== STATES.ACTIVE) return;
+  const f = parseFloat(document.getElementById('jog-speed').value) * 60;
+  gcode(`VAOC_MOVE Z=${dz} F=${f}`);
+}
+
+document.getElementById('jog-yp').addEventListener('click', () => jog(0,  increment));
+document.getElementById('jog-ym').addEventListener('click', () => jog(0, -increment));
+document.getElementById('jog-xp').addEventListener('click', () => jog( increment, 0));
+document.getElementById('jog-xm').addEventListener('click', () => jog(-increment, 0));
+document.getElementById('jog-zp').addEventListener('click', () => jogZ( increment));
+document.getElementById('jog-zm').addEventListener('click', () => jogZ(-increment));
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const map = {
+    ArrowUp:    [0,  increment], ArrowDown:  [0, -increment],
+    ArrowRight: [ increment, 0], ArrowLeft:  [-increment, 0],
+  };
+  if (map[e.key]) { e.preventDefault(); jog(...map[e.key]); }
+});
+
+// =========================================================
+// BOTONES DE ACCIÓN
+// =========================================================
+document.getElementById('btn-start').addEventListener('click', async () => {
+  controlPointSet = false;
+  pendingX = pendingY = null;
+  document.getElementById('offset-block').style.display = 'none';
+  setState(STATES.STARTING);
+  await gcode('VAOC_START');
+  setTimeout(() => setState(STATES.ACTIVE), 1200);
+});
+
+document.getElementById('btn-set-t0').addEventListener('click', async () => {
+  await gcode('VAOC_SET_T0');
+  controlPointSet = true;
+  // T1 se activa en la macro; el WS actualizará activeTool → renderState
+});
+
+document.getElementById('btn-set-t1').addEventListener('click', async () => {
+  await gcode('VAOC_SET_T1');
+  setTimeout(showOffset, 600);
+});
+
+document.getElementById('btn-switch').addEventListener('click', async () => {
+  await gcode('VAOC_SWITCH');
+  // activeTool updates via WebSocket
+});
+
+document.getElementById('btn-accept').addEventListener('click', async () => {
+  if (pendingX === null) return;
+  const xStr = pendingX.toFixed(4), yStr = pendingY.toFixed(4);
+  await gcode('VAOC_ACCEPT');
+  setState(STATES.IDLE);
+  controlPointSet = false;
+  // Keep offset visible after accept so user can copy the values
+  // pendingX/Y intentionally NOT cleared
+});
+
+
+document.getElementById('btn-cancel').addEventListener('click', async () => {
+  await gcode('VAOC_CANCEL');
+  setState(STATES.IDLE);
+  pendingX = pendingY = null;
+  controlPointSet = false;
+  document.getElementById('offset-block').style.display = 'none';
+});
+
+// =========================================================
+// SETTINGS
+// =========================================================
+function applyIP() {
+  printerIP = document.getElementById('ip-input').value.trim();
+  localStorage.setItem('vaoc_ip', printerIP);
+  const camInput = document.getElementById('cam-url-input');
+  if (!localStorage.getItem('vaoc_cam_url') || camInput.value.includes(guessedIP)) {
+    camInput.value = `http://${printerIP}/webcam2/?action=stream`;
+  }
+  connectWS();
+  applyCam();
+}
+
+document.getElementById('jog-speed').addEventListener('change', function() {
+  jogSpeed = parseFloat(this.value);
+  localStorage.setItem('vaoc_jog_speed', jogSpeed);
+});
+
+// =========================================================
+// MÁQUINA DE ESTADOS → UI
+// =========================================================
+function setState(s) { state = s; renderState(); }
+
+function renderState() {
+  const card    = document.getElementById('state-card');
+  const bStart  = document.getElementById('btn-start');
+  const bSetT0  = document.getElementById('btn-set-t0');
+  const bSetT1  = document.getElementById('btn-set-t1');
+  const bSwitch = document.getElementById('btn-switch');
+  const bAccept = document.getElementById('btn-accept');
+  const bCancel = document.getElementById('btn-cancel');
+
+  // Reset todo
+  [bStart, bSetT0, bSetT1, bSwitch, bAccept, bCancel].forEach(b => b.disabled = true);
+
+  switch (state) {
+
+    case STATES.IDLE:
+      card.className = 'state-card idle';
+      card.innerHTML = 'Ready to calibrate. Press <b>START</b>.';
+      bStart.disabled = false;
+      break;
+
+    case STATES.STARTING:
+      card.className = 'state-card idle';
+      card.innerHTML = '⏳ Homing and moving to camera position...';
+      bCancel.disabled = false;
+      break;
+
+    case STATES.ACTIVE:
+      bStart.disabled  = false;  // allows restart
+      bCancel.disabled = false;
+
+      if (activeTool === 0) {
+        // T0 active
+        card.className = 'state-card t0';
+        card.innerHTML = '<span class="badge t0">T0</span>&nbsp; Center the nozzle using the jog buttons and press <b>SET T0</b> to save the reference point.';
+        bSetT0.disabled  = false;
+        bSwitch.disabled = !controlPointSet;  // SWITCH disponible si ya hay control point
+      } else {
+        // T1 active
+        card.className = 'state-card t1';
+        if (!controlPointSet) {
+          card.innerHTML = '<span class="badge t1">T1</span>&nbsp; Press SET T0 first to establish the reference point.';
+        } else if (pendingX === null) {
+          card.innerHTML = '<span class="badge t1">T1</span>&nbsp; T1 at position. Center the nozzle and press <b>SET T1</b> to calculate the offset.';
+        } else {
+          card.innerHTML = '<span class="badge t1">T1</span>&nbsp; Offset calculated. You can fine-tune and press <b>SET T1</b> again, use <b>SWITCH</b> to verify, or press <b>ACCEPT</b>.';
+        }
+        bSetT1.disabled  = !controlPointSet;
+        bSwitch.disabled = !controlPointSet;
+        bAccept.disabled = (pendingX === null);
+      }
+      break;
+  }
+}
+
+function showOffset() {
+  if (pendingX === null) return;
+  document.getElementById('off-x').textContent = pendingX.toFixed(4);
+  document.getElementById('off-y').textContent = pendingY.toFixed(4);
+  document.getElementById('offset-block').style.display = 'block';
+}
+
+function copyVal(id) {
+  const val = document.getElementById(id).textContent;
+  if (val === '—') return;
+  navigator.clipboard.writeText(val).then(() => {
+    const btn = document.querySelector(`[onclick="copyVal('${id}')"]`);
+    const orig = btn.textContent;
+    btn.textContent = '✓';
+    btn.style.color = 'var(--ok)';
+    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 1200);
+  });
+}
+
+// Render inicial
+renderState();
+</script>
+</body>
+</html>
