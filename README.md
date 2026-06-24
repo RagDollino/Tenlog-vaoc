@@ -229,9 +229,6 @@ Add `custom_flags: --format=MJPEG` to your camera section in `crowsnest.conf`.
 **SWITCH puts T1 at the wrong position**
 Press **SET T1** at least once before using SWITCH. If SWITCH is used before SET T1, T1 falls back to the T0 control point.
 
-**Klipper template error on load**
-Check that `'%.4f'|format(value)` syntax is preserved in `vaoc.cfg` — do not use Python f-string style `{value:.4f}`.
-
 ---
 
 ## Manual nginx and sidebar configuration
